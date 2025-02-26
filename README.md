@@ -1,4 +1,5 @@
 # Seagrass-Fidelity-Project
+This repository is an archive for a paper by Grimmelbein et al. 2025, Marine Ecology Progress Series.
 seagrass fidelity project archive
 
 The following files are included:
