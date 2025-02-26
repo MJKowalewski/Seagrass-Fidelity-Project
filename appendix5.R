@@ -1,7 +1,7 @@
 #--------------------------------------------------
 # Appendix 5. LIVE_DEAD SEAGRASS COMPARISONS
 # 
-# Last updated: August 21 2024
+# Last updated: December 16 2024
 # Written by M. Kowalewski (kowalewski@ufl.edu)
 #
 # files archived at https://github.com/MJKowalewski/Seagrass-Fidelity-Project
@@ -11,15 +11,16 @@
 # Initial steps ====
 #         Upload libraries, define functions, set parameter values, 
 #         initial data summary and basic quality control
-outPDF <- F # "T" outputs PDF figures, "F" prints figures in Rstudio console 
+outPDF <- T # "T" outputs PDF figures, "F" prints figures in Rstudio console 
 options(scipen=100)
 pdf.options(paper="special", onefile=TRUE, family='Helvetica',
             pointsize=10, encoding="ISOLatin1.enc")
 outPDF <- TRUE # set to 'T' or TRUE to output pdf files with figures
 pdf.options(paper="special", onefile=TRUE, family='Helvetica',
             pointsize=10, encoding="ISOLatin1.enc")
-library(plyr)
+# library(plyr)
 library(vegan)
+
 # to install PaleoFidelity package run the next line
 # devtools::install_github('mjkowalewski/PaleoFidelity', build_vignettes = TRUE)
 library(PaleoFidelity)
@@ -49,12 +50,22 @@ data.summary <- function(x, name) {
 
 # datsets and arguments ====
 fd <- read.csv('appendix1.csv') # upload raw data
+env <- read.csv('appendix2.csv', stringsAsFactors = T) # long and lat coordinates of sites
+# remove non-seagrass sites from Steinhatchee
+# sites 98, 114, 111, 101, 75, 76, 77, 87
+rem.sites <- which(fd$site %in% c('STE 75', 'STE 76', 'STE 77',
+                     'STE 87', 'STE 98', 'STE 101',
+                     'STE 111', 'STE 114'))
+rem.coords <- which(env$X %in% c('STE 75', 'STE 76', 'STE 77',
+                                  'STE 87', 'STE 98', 'STE 101',
+                                  'STE 111', 'STE 114'))
+fd <- fd[-rem.sites,]
+env <- env[-rem.coords,]
 n.min.q <- 30 # minimum number of specimens per quadrant
 loc.vars <- 14 # number of environmental and locality info variables 
 fid.times <- 1000 # number of iterations, fidelity analyses (time consuming, set to 100 for trial runs)
 sum(colSums(fd[,-(1:loc.vars)]) == 0) # confirm that all taxa have specimens
 # map-related  datasets
-env <- read.csv('appendix2.csv', stringsAsFactors = T) # long and lat coordinates of sites
 map1 <- read.csv('appendix3.csv', na.strings=c('',NA,'.'), header=F) # NOAA map coordinates (study area)
 map2 <- read.csv('appendix4.csv', header=F, na.strings=c(NA, '.', '')) # NOAA map coordinates (Florida outline)
 plgs <- which(is.na(map1[2,]))
@@ -85,7 +96,7 @@ plot(plot.lim, type='n', xlab='', ylab='', las=1)
   }
  }
  points(env[,c(3,2)], pch=21, cex=1, bg='white', col=site.col)
- text(-83.31, 29.66,  'Steinchatchee', cex=0.7, col='black')
+ text(-83.31, 29.66,  'Steinhatchee', cex=0.7, col='black')
  text(-82.71, 29.18,  'Waccasassa', cex=0.7, col='black')
  text(-82.84, 28.88,  'Crystal River', cex=0.7, col='black')
  text(-82.84, 28.75,  'Homosassa', cex=0.7, col='black')
@@ -131,6 +142,7 @@ for (i in levels(sam)) {
   }
 }
 
+
 paste('samples retained =', nrow(Frac)/2,
       'min sample =', min(rowSums(Frac[,-(1:loc.vars)])))
 ( frac_filter <- data.summary(Frac, 'Fractions Filtered: Total') )
@@ -146,7 +158,6 @@ FracD <- droplevels(Frac[-which(Frac$type == 'live'),])
 res1 <- FidelityEst(as.matrix(FracL[,-(1:loc.vars)]), as.matrix(FracD[,-(1:loc.vars)]),
                     t.filters = 1, report=F, iter = fid.times, tfsd='wisconsin',
                     iter2 = fid.times, sim.measure = 'bray', cor.measure = 'spearman')
-
 # QUADRAT LEVEL ANALYSES ====,
 # (group by system, site, quadrat, and type)
 quad <- as.factor(paste(fd$system, fd$site_num, fd$station, fd$type))
@@ -220,6 +231,40 @@ res3 <- FidelityEst(as.matrix(SiteL[,-(1:loc.vars)]), sim.measure = 'bray',
                     as.matrix(SiteD[,-(1:loc.vars)]),
                     t.filters = 1, report=F, tfsd='wisconsin', iter = fid.times,
                     iter2 = fid.times)
+
+
+# sample loss assessment====
+# fractions
+
+table(Frac$fraction)/2
+table(Frac$fraction)/2 / sum(table(Frac$fraction)/2) 
+( f.ret <- table(Frac$system)/2 )
+( f.tot <- table(fd$system)/2)
+( f.prop <- f.ret/f.tot )
+mean(f.prop)
+sum(f.ret)
+sum(f.tot)
+# quadrats
+( q.ret <- table(unlist(quad$system))/2 )
+( q.tot <- table(tapply(fd$system, paste(fd$system, fd$site, fd$station, fd$type),
+                      function(x) x[1]))/2 )
+( q.prop <- q.ret/q.tot )
+mean(q.prop)
+sum(q.ret)
+sum(q.tot)
+
+# sites
+( s.ret <- table(unlist(siteout$system))/2 )
+( s.tot <- table(tapply(fd$system, paste(fd$system, fd$site, fd$type),
+                        function(x) x[1]))/2 )
+sum(s.ret)
+
+# fidelity by estuary for qudrat-fraction samples
+fracfid <- data.frame(unlist(Frac$system), res1$x)
+tapply(fracfid[,2], fracfid[,1], mean)
+quadfid <- data.frame(unlist(quad$system), res2$x)
+tapply(quadfid[,2], quadfid[,1], mean)
+
 
 # ESTUARY LEVEL ANALYSES ====
 # (group by system and type)
@@ -341,7 +386,6 @@ rownames(Table1) <- c('fractions', 'quadrats', 'sites', 'estuaries')
 Table1
 write.csv(Table1, 'table1.csv')
 
-dim(data.summary.all)
 # Table 2====
 Table2 <- data.summary.all[,c(1,3,4,6,7,9,10,12,13)]
 Table2
@@ -417,20 +461,20 @@ par(tempar)
 if(outPDF) dev.off()
 
 #### DIVERSITY/EVENNESS OFFSET FIGURES ====
-col.sym.pt <- 'darkgray'
-bg.sym.pt <- 'gray'
-col.cf.col <- 'gray'
+col.sym.pt <- 'black'
+bg.sym.pt <- 'lightgray'
+col.cf.col <- 'darkgray'
 col.colmean <- 'black'
 my.transp <- 0.7
 max.x <- max(abs(c(repdiv1$x[,2],repdiv2$x[,2],repdiv3$x[,2],repdiv4$x[,2])))
 max.y <- max(abs(c(repdiv1$y[,2],repdiv2$y[,2],repdiv3$y[,2],repdiv4$y[,2])))
 
 ######### Figure 3 with Spearman Plots
-histlist <- list(res4$x, apply(res4$x.pf.dist, 2, mean),
-                 res3$x, apply(res3$x.pf.dist, 2, mean),
+histlist <- list(res1$x, apply(res1$x.pf.dist, 2, mean),
                  res2$x, apply(res2$x.pf.dist, 2, mean),
-                 res1$x, apply(res1$x.pf.dist, 2, mean))
-gpnames <- c("estuaries", "sites", "quadrats", "quadrat-fractions")
+                 res3$x, apply(res3$x.pf.dist, 2, mean),
+                 res4$x, apply(res4$x.pf.dist, 2, mean))
+gpnames <- c("quadrat-fractions", "quadrats", "sites", "estuaries")
 bar.col <- 'white'
 border.col <- 'black'
 bar.col.mod <- 'gray70'
@@ -442,10 +486,10 @@ tempar <- par(mfrow=c(4,1), mar=c(0,0,2,2), oma=c(5,5,0,0))
 j <- 0
 for (i in seq(1, 7, 2)) {
   j <- j + 1
-  if (j == 1) my.ylim <- 5
-  if (j == 2) my.ylim <- 10
-  if (j == 3) my.ylim <- 20
-  if (j == 4) my.ylim <- 30
+  if (j == 1) my.ylim <- 30
+  if (j == 2) my.ylim <- 20
+  if (j == 3) my.ylim <- 10
+  if (j == 4) my.ylim <- 5
   hist(histlist[[i+1]], breaks=seq(-1,1,0.05), main='', axes=F,
        ylab='', xlab='', col=adjustcolor(bar.col.mod, 0.3),
        border=NA, ylim=c(0,my.ylim)) 
@@ -460,11 +504,11 @@ for (i in seq(1, 7, 2)) {
   if(j > 3) mtext(side=1, line=3, bquote("spearman" ~ italic(rho)),
                   cex=1)
   mtext(side=3, line=-2, adj=0.05, LETTERS[j], cex=1.1)
-  mtext(side=3, line=-4, adj=0.05, gpnames[j], cex=0.7)
-  mtext(side=3, line=-5, adj=0.05, cex=0.7,
+  mtext(side=3, line=-4, adj=0.05, gpnames[j], cex=0.9)
+  mtext(side=3, line=-5, adj=0.05, cex=0.8,
         paste('n =', length(histlist[[i]])))
   meanrho <- round(mean(histlist[[i]]),2)
-  mtext(side=3, line=-6, adj=0.05, cex=0.7,
+  mtext(side=3, line=-6, adj=0.05, cex=0.8,
         bquote(italic(rho)[mean]==.(meanrho)))
   
 }
@@ -472,12 +516,15 @@ mtext(side=2, line=3, 'number of samples', cex=1, outer=T)
 par(tempar)
 if(outPDF) dev.off()
 
+taxon.names <- sub(".", " ", 
+                    colnames(fd)[-(1:loc.vars)], fixed=T)
+
 # Figure 4 fidelity for all data pooled
 if (outPDF) pdf('Figure 4 fidelity_pooled.pdf', width = 5, height = 5)
 tmp.par <- par(mar=c(3,8,2,8))
 rep4 <- LDPlot(colSums(fd[fd$type=="live" , -(1:loc.vars)]),
                colSums(fd[fd$type=="dead" , -(1:loc.vars)]),
-               tax.names = colnames(fd)[-(1:loc.vars)],
+               tax.names = taxon.names,
                toplimit = 30, cex.names = 0.6, report=T) 
 par(tmp.par)
 if (outPDF) dev.off()
@@ -487,19 +534,23 @@ if(outPDF) pdf(paste0('Figure 5 diversity_offset_multipanel',runif(1),'.pdf'),
                width=4.5, height=7)
 tempar <- par(mfrow=c(4,1), oma=c(4,1,0.5,0.5), mar=c(0,5,0,0))
 AlphaPlot(repdiv1, transp=my.transp, xlab='', col=col.sym.pt, cf.col=col.cf.col,
-          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y)
+          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y, cex=1)
+points(repdiv1$xmean[1], repdiv1$ymean[1], pch=16, cex=3, col=adjustcolor('black', .5))
 axis(2, las=1)
-mtext(side=3, line=-1.5, adj=0.05, 'A. Fractions')
+mtext(side=3, line=-1.5, adj=0.05, 'A. Quadrat-Fractions')
 AlphaPlot(repdiv2, transp=my.transp, xlab='', col=col.sym.pt, cf.col=col.cf.col,
-          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y)
+          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y, cex=1)
+points(repdiv2$xmean[1], repdiv2$ymean[1], pch=16, cex=3, col=adjustcolor('black', .5))
 axis(2, las=1)
 mtext(side=3, line=-1.5, adj=0.05, 'B. Quadrats')
 AlphaPlot(repdiv3, transp=my.transp, xlab='', col=col.sym.pt, cf.col=col.cf.col,
-          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y)
+          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y, cex=1)
+points(repdiv3$xmean[1], repdiv3$ymean[1], pch=16, cex=3, col=adjustcolor('black', .5))
 axis(2, las=1)
 mtext(side=3, line=-1.5, adj=0.05, 'C. Sites')
 AlphaPlot(repdiv4, transp=my.transp, xlab='', col=col.sym.pt, cf.col=col.cf.col,
-          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y)
+          bgpt=bg.sym.pt, colmean = col.colmean, axes=F, xmax=max.x, ymax=max.y, cex=1)
+points(repdiv4$xmean[1], repdiv4$ymean[1], pch=16, cex=3, col=adjustcolor('black', .5))
 mtext(side=3, line=-1.5, adj=0.05, 'D. Estuaries')
 mtext(side=1, line=2.5, bquote(Delta[S]))
 axis(2, las=1)
@@ -507,8 +558,8 @@ axis(1)
 par(tempar)
 if(outPDF) dev.off()
 
-#### Figure 6 - SUMMARY OF DIVERSITY OFFSETS ====
-if(outPDF) pdf(paste0('Figure 6 diversity_offset_',runif(1),'.pdf'),
+#### Figure S1 - SUMMARY OF DIVERSITY OFFSETS ====
+if(outPDF) pdf(paste0('Figure S1 diversity_offset_',runif(1),'.pdf'),
                width=7, height=4.5)
 tempar <- par(mar=c(5,5,0.5,5))
 plot(0,0, xlim=c(0,10), ylim=c(-0.05,0.25), type='n', axes=F,
@@ -570,8 +621,8 @@ rmd.sim <- apply(r.mean.d, 2, function(x) c(mean(x), quantile(x, prob=0.025),
                                quantile(x, prob=0.975)))
 rml.sim <- apply(r.mean.l, 2, function(x) c(mean(x), quantile(x, prob=0.025),
                                  quantile(x, prob=0.975)))
-
-if (outPDF) pdf('Figure 7 pairwise comparisons.pdf')
+# figure S2 ====
+if (outPDF) pdf('Figure S2 pairwise comparisons.pdf')
 tempar <- par(mfrow=c(3,2), mar=c(2,2,0,0), oma=c(3,3,0.5, 0.5))
 k <- 0
 for (i in 3:1) {
@@ -593,62 +644,107 @@ for (i in 3:1) {
 par(tempar)
 if (outPDF) dev.off()
 
-### Figure 8 NMDS ====
+### Figure 6 NMDS ====
 quad.data <- rbind(QuadL[,-(1:loc.vars)], QuadD[,-(1:loc.vars)])
 quad.d <- quad.data[,-which(colSums(quad.data > 0) < 2)]
-res5 <- metaMDS(wisconsin(quad.d), autotransform=F, k=3, try = 50)
+
+res5x <- metaMDS(wisconsin(quad.d), autotransform=F, k=3, try = 100)
+res5 <- metaMDS(wisconsin(quad.d), previous.best=res5x, 
+                 autotransform=F, k=3, try = 100)
+
 qtype <- as.factor(c(unlist(QuadL$type), unlist(QuadD$type)))
 qsite <- as.factor(c(unlist(QuadL$env.site), unlist(QuadD$env.site)))
-qsite.col <- c('yellow3', 'yellow3', 'yellow3', 'blue1', 'blue1',
-               'blue1', 'blue1', 'blue1', 'green4', 'green4', 'green4',
-               'red1', 'red1', 'red1', 'red1', 'black', 'black', 'black',
-               'black', 'darkgray', 'darkgray')
+qsystem <- as.factor(unlist(QuadL$system))
+# mycol.F <- colorRampPalette(c("darkseagreen2", "darkslategray"))
+# mycol.F <- colorRampPalette(c("sienna1", "sienna4"))
+# mycol.F <- colorRampPalette(c("steelblue1", "steelblue4"))
+# mycol.F <- colorRampPalette(c("steelblue1", "black"))
+# mycol.F <- colorRampPalette(c("cyan1", "black", "coral1"))
+# mycol.grad <- mycol.F(6)
+mycol.grad <- c('cyan1', 'cyan3', 'skyblue1', 'deepskyblue2', 'deepskyblue4','black')
+qsite.col <- c(rep(mycol.grad[2],3), rep(mycol.grad[4],5),
+               rep(mycol.grad[3],3), rep(mycol.grad[6],2),
+               rep(mycol.grad[5],,4), rep(mycol.grad[1],2))
+
+#qsite.col <- c(rep('skyblue',3), rep('blue',5),
+#               rep('skyblue3',3), rep('black',2),
+#               rep('blue4',4), rep('lightskyblue1',2))
+# est.col <- c('lightskyblue1', 'skyblue', 'skyblue3', 'blue', 'blue4')
+est.col <- mycol.grad
+
 qsite.text <- c(unlist(QuadL$site_num),
                 unlist(QuadL$site_num))
-pchd <- 16
+
+pchd <- 17
 pchl <- 21 
-cex.sym <- 0.9
+cex.sym <- 1.3
 dhf <- nrow(res5$points)/2
 dhf2 <- dhf + 1
 dhf3 <- 2*dhf
+qsymb <- as.factor(paste(qtype, qsystem))
+
 ########## FIGURE NMDS ====
-if (outPDF) pdf(paste0('Figure 8 NMDS_quadrats',runif(1),'.pdf'), width = 5, height = 7)
+if (outPDF) pdf(paste0('Figure 6 NMDS_quadrats',runif(1),'.pdf'), width = 5, height = 7)
 tempar <- par(mfrow=c(3,1), mar=c(0,0,1,0), oma=c(5,5,0,1))
 plot(res5$points[,1], res5$points[,2], pch=c(pchd,pchl)[qtype],
-     col=qsite.col[qsite], cex=cex.sym, ylim=c(-1.5,1), xlim=c(-1,1.5),
-     axes=F)
+     col=adjustcolor(qsite.col[qsite], 0.7),
+     cex=cex.sym, ylim=c(-1.5,1), xlim=c(-1,1.5), axes=F)
   box()
   axis(2, las=1)
-  mtext(side=3, line=-1.5, adj=0.95, 'A')
-  text(rep(1.45,6), seq(-0.25,-1.5,-0.25), pos=4, levels(as.factor(fd$system)),
-       cex=0.7, col=unique(qsite.col))
-  points(rep(1.45,6), seq(-0.25,-1.5,-0.25), pch=16, cex=cex.sym, col=unique(qsite.col))
-  text(1.2, -1, 'live', pos=4, cex=cex.sym)
-  text(1.2, -1.3, 'dead', pos=4, cex=cex.sym)
-  points(1.2, -1, pch=21, cex=cex.sym)
-  points(1.2, -1.3, pch=16, cex=cex.sym)
-  text(-0.85, 0.9, paste('stress =', round(res5$stress, 3)), cex=cex.sym)
+  mtext(side=3, line=-1.5, adj=0.98, 'A')
+  mtext(side=3, line=-1.3, adj=0.02, 'all data', cex=0.9)
+  text(rep(1.35,6), seq(-0.15,-1.4,-0.25), pos=4, 
+       levels(as.factor(fd$system))[c(4,5,2,3,1,6)],
+       cex=1.4, col=unique(qsite.col)[c(4,5,2,3,1,6)])
+  points(rep(1.35,6), seq(-0.15,-1.4,-0.25), pch=21, cex=cex.sym,
+         col=unique(qsite.col)[c(4,5,2,3,1,6)])
+  text(1.35, 0.45, 'live', pos=4, cex=1.4, col=est.col[6])
+  text(1.35, 0.2, 'dead', pos=4, cex=1.4, col=est.col[6])
+  points(1.35, 0.45, pch=pchl, cex=cex.sym, col=est.col[6])
+  points(1.35, 0.2, pch=pchd, cex=cex.sym, col=est.col[6])
+  mtext(side=3, line=-1.2, adj=0.9, cex=0.8,
+        paste('stress =', round(res5$stress, 3)))
   mtext(side=2, line=3, 'NMDS 2')
+
 plot(res5$points[1:dhf,1], res5$points[1:dhf,2], pch=pchl,
-     col=qsite.col[qsite], ylim=c(-1.5,1), xlim=c(-1,1.5),
-     axes=F, type='n')
-  text(res5$points[1:dhf,1], res5$points[1:dhf,2],
-       col=qsite.col[qsite], qsite.text, cex=cex.sym)
+     col=qsite.col[qsite[1:dhf]], ylim=c(-1.5,1), xlim=c(-1,1.5),
+     axes=F, cex=cex.sym)
+cent.live <- cbind(tapply(res5$points[1:dhf,1], qsystem, mean),
+                   tapply(res5$points[1:dhf,2], qsystem, mean))
+cent.live <- cent.live[c(4, 5, 2, 3, 1, 6),]
+for (i in 1:5) arrows(cent.live[i,1], cent.live[i,2], cent.live[i+1,1], cent.live[i+1,2],
+                      col=rev(est.col)[i], code=1, length=0.1)
   box()
   axis(2, las=1)
-  #axis(1, at=seq(-0.5,1,0.5), labels=seq(-0.5,1,0.5))
-  mtext(side=3, line=-1.5, adj=0.95, 'B')
+  mtext(side=3, line=-1.5, adj=0.98, 'B')
+  mtext(side=3, line=-1.3, adj=0.02, 'live only', cex=0.9)
   mtext(side=2, line=3, 'NMDS 2')
 plot(res5$points[dhf2:dhf3,1], res5$points[dhf2:dhf3,2], pch=pchd,
-     col=qsite.col[qsite], ylim=c(-1.5,1), xlim=c(-1,1.5),
-     axes=F, type='n')
-  text(res5$points[dhf2:dhf3,1], res5$points[dhf2:dhf3,2],
-     col=qsite.col[qsite], qsite.text, cex=cex.sym)
+     col=qsite.col[qsite[dhf2:dhf3]], ylim=c(-1.5,1), xlim=c(-1,1.5),
+     axes=F, cex=cex.sym)
+  cent.dead <- cbind(tapply(res5$points[dhf2:dhf3,1], qsystem, mean),
+                   tapply(res5$points[dhf2:dhf3,2], qsystem, mean))
+  cent.dead <- cent.dead[c(4, 5, 2, 3, 1, 6),]
+  for (i in 1:5) arrows(cent.dead[i,1], cent.dead[i,2], cent.dead[i+1,1], cent.dead[i+1,2],
+                      col=rev(est.col)[i], code=1, length=0.1)
   box()
   axis(2, las=1)
   axis(1, at=seq(-1,1.5,0.2), labels=seq(-1,1.5,0.2))
-  mtext(side=3, line=-1.5, adj=0.95, 'C')
+  mtext(side=3, line=-1.5, adj=0.98, 'C')
+  mtext(side=3, line=-1.3, adj=0.02, 'dead only', cex=0.9)
   mtext(side=1, line=3, 'NMDS 1')
   mtext(side=2, line=3, 'NMDS 2')
 par(tempar)
 if(outPDF) dev.off()
+
+# c14 analyses====
+c14 <- read.csv('c14.csv')
+c14$Median <- c14$Median + (2016 - 1950)
+mean(c14$Median)
+median(c14$Median)
+2016-mean(c14$Median[which(c14$taxon == 'Codakia orbicularis')])
+2016-mean(c14$Median[which(c14$taxon == 'Transennella spp.')])
+median(c14$Median[which(c14$taxon == 'Codakia orbicularis')])
+median(c14$Median[which(c14$taxon == 'Transennella spp.')])
+mean(tapply(2016-c14$Median, c14$Estuary, function(x) sum(x < 1800))/
+  tapply(2016-c14$Median, c14$Estuary, length))
